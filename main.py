@@ -4,13 +4,12 @@ import os
 import requests_cache
 from dotenv import load_dotenv
 
-import flight_data
+
 from data_manager import DataManager
 from flight_search import FlightSearch
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
-import serpapi
-
+from flight_data import FlightData
 # ----------ENV VARIABLES ---------
 load_dotenv()
 requests_cache.install_cache('cache')
@@ -32,5 +31,7 @@ six_months=datetime.today()+relativedelta(months=+6)
 # Build flight search object and search
 SEARCH = FlightSearch()
 from_place = 'LHR'
-to_place = 'CDG'
-print(SEARCH.flight_search(from_place, to_place, from_time=from_time, to_time=to_time,))
+to_place = 'CDG',
+print(SEARCH.flight_search(from_place, to_place, from_time=from_time, to_time=to_time))
+# Parse Data from flightsearch, and pass tow flightdata to filter and return cheapest flight
+print()
