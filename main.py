@@ -5,6 +5,7 @@ import requests_cache
 from dotenv import load_dotenv
 from data_manager import DataManager
 from flight_search import FlightSearch
+from notification_manager import NotificationManager
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from flight_data import FlightData
@@ -21,7 +22,9 @@ SEARCH = FlightSearch()
 # Build object and get data
 DATA = DataManager()
 sheet_data = DATA.get_data()
-DATA = FlightData()
+FLIGHT = FlightData()
+# Build message object for twilio
+TWILIO = NotificationManager()
 # Dates
 from_time= datetime.today() + timedelta(days=1)
 to_time = from_time + timedelta(days=6)
@@ -32,16 +35,37 @@ from_place = 'MDT'
 # Iterate through each row(dict) in the sheet, and pull the IATA Code ----> into to_place
 # call flight_search on every loop for each IATA Code
 # Compare price in sheet dict, with price from discounted flight data\
+
 def compare(sheet):
+    sheety_header = {
+        "Authorization": f"Bearer {os.environ.get('SHEETY_AUTH_HEADER')}",
+    }
+    updated_count = 0
     for row in sheet:
         to_place = row["iataCode"]
         flight_data = SEARCH.flight_search(from_place, to_place, from_time=from_time, to_time=to_time)
-        # combined = flight_data["best_flights"] + flight_data["other_flights"]
-        discounted_flight_data = DATA.find_cheapest_flight(new_data)
+        combined = flight_data["best_flights"] + flight_data["other_flights"]
+        discounted_flight_data = FLIGHT.find_cheapest_flight(combined)
+        print(f"{row['city']}: sheet price ${row['price']}, live price ${discounted_flight_data['price']}")
         if discounted_flight_data["price"] < row["price"]:
-            # Alter data in sheet
-            # Do full twilio stuff
-    return
+            payload = {
+                "sheet1": {
+                    "Price": discounted_flight_data["price"]
+                }
+            }
+            update_url =  f"{os.environ.get('SHEETY_END_POINT')}/{row['id']}"
+            response = requests.put(url=update_url,json=payload, headers=sheety_header)
+            print(response.status_code, response.text)
+            updated_count += 1
 
-# Parse Data from flightsearch, and pass tow flightdata to filter and return cheapest flight
-new_data = compare(sheet_data)
+            # Message user
+            first_leg = discounted_flight_data["flights"][0]
+            last_leg = discounted_flight_data["flights"][-1]
+            TWILIO.message(discounted_flight_data["price"],
+                    first_leg["departure_airport"]["id"],
+                    last_leg["arrival_airport"]["id"],
+                    first_leg["departure_airport"]["time"],
+                    to_time.strftime("%Y-%m-%d"))
+    return updated_count
+completed = compare(sheet_data)
+print(completed)
